@@ -36,23 +36,41 @@ dig +short hermes.amar-home.ru
 
 ---
 
-## 2. Хардening сервера (ufw, fail2ban, SSH key-only)
+## 2. Хардening сервера (ufw, fail2ban, SSH key-only, IP-allowlist)
+
+Весь доступ, кроме Telegram, ограничен двумя IP:
+
+- Дом: `46.34.141.146`
+- Работа: `144.206.228.59`
+
+Telegram-бот не требует входящего порта (long polling — соединение исходящее, к `api.telegram.org`), поэтому на него это ограничение не влияет.
+
+Порт 80 оставляем открытым для всех — на нём Caddy отвечает только на ACME-проверку Let's Encrypt (выпуск/продление сертификата) и делает редирект на HTTPS; запросы Let's Encrypt идут с разных IP по всему миру, и никакого доступа к данным/дашборду через 80 нет.
 
 **Важно:** меняя SSH-доступ, не закрывайте текущую сессию, пока не убедитесь, что новая сессия подключается. Если что-то пойдёт не так — вы рискуете потерять доступ.
+
+**Риск:** если домашний IP динамический и поменяется, доступ по SSH/HTTPS с дома пропадёт, пока вы не обновите правила ufw из другого разрешённого места (или через веб-консоль/VNC хостинг-провайдера). Уточните у провайдера сервера, есть ли такая запасная консоль — это единственный способ восстановить доступ, если оба IP вдруг окажутся недействительны.
 
 ```bash
 sudo apt install -y ufw fail2ban
 
-# ufw: запрещаем всё входящее по умолчанию, открываем только нужное
+# ufw: запрещаем всё входящее по умолчанию
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
-sudo ufw allow 22/tcp
+
+# порт 80 — открыт всем (только ACME-проверка + редирект, без доступа к данным)
 sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
+
+# SSH и HTTPS-дашборд — только с дома и с работы
+sudo ufw allow from 46.34.141.146 to any port 22 proto tcp
+sudo ufw allow from 144.206.228.59 to any port 22 proto tcp
+sudo ufw allow from 46.34.141.146 to any port 443 proto tcp
+sudo ufw allow from 144.206.228.59 to any port 443 proto tcp
+
 sudo ufw enable
 sudo ufw status verbose
 
-# fail2ban: достаточно дефолтного jail для sshd
+# fail2ban: дополнительный уровень защиты SSH (на случай попыток с других IP, которые не пройдут ufw, но полезен и сам по себе)
 sudo systemctl enable --now fail2ban
 sudo fail2ban-client status sshd
 ```
@@ -184,7 +202,8 @@ yay -S hermes-desktop-bin
 
 - [ ] `dig +short hermes.amar-home.ru` → `193.228.139.46`
 - [ ] `https://hermes.amar-home.ru` открывается, сертификат валиден
-- [ ] `ufw status` → активен, открыты только 22/80/443
+- [ ] `ufw status` → активен; 80 открыт всем, 22 и 443 — только с `46.34.141.146` и `144.206.228.59`
+- [ ] Доступ по SSH/HTTPS с IP, не входящего в allowlist, действительно блокируется (проверить с третьего устройства/VPN)
 - [ ] `fail2ban-client status sshd` → jail активен
 - [ ] Вход по паролю отключён, ключ работает из нового окна терминала
 - [ ] OpenRouter ключ в конфиге, Hermes может выполнить тестовый запрос через него
