@@ -12,6 +12,7 @@
 - Вход: `ssh amar@hermes`.
 - Файрвол не настроен.
 - Старые данные сервера сохранять не нужно (чистый старт).
+- **(Выполнено 2026-07-05) GitHub-доступ для пользователя `amar`:** `gh` CLI установлен (v2.96.0, через официальный apt-репозиторий `cli.github.com`), `gh auth login` пройден (device-flow, `Logged in as Amar73`, scopes `repo`/`gist`/`read:org`), credential helper подключен (`gh auth git-credential` для `github.com`/`gist.github.com`), git identity выставлен (`Andrey Maryanenko <a.maryanenko@gmail.com>`, как на локальной машине). В `~/Amar73/` склонированы и проверены на реальный push: `hermes`, `rclone`, `arch-niri`, `setup`. Это доступ **только под `amar`** — для пайплайна из раздела 10 (пуш в `Amar73/hermes-scripts` от лица `paperclip`) нужна отдельная настройка, см. шаг 10.4.
 
 Везде ниже команды на сервере выполняются после `ssh amar@hermes`, если не указано иное.
 
@@ -250,6 +251,7 @@ gh repo create Amar73/hermes-scripts --public --confirm
 
 ## 11. Чек-лист готовности
 
+- [x] GitHub-доступ под `amar` настроен (`gh auth login`, credential helper, `~/Amar73/{hermes,rclone,arch-niri,setup}` склонированы, push проверен) — выполнено 2026-07-05
 - [ ] `dig +short hermes.amar-home.ru` → `193.228.139.46`
 - [ ] `https://hermes.amar-home.ru` открывается, сертификат валиден
 - [ ] `ufw status` → активен; 80 открыт всем, 22 и 443 — только с `46.34.141.146` и `144.206.228.59`
