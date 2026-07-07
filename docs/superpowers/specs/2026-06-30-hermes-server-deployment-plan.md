@@ -120,6 +120,27 @@ ssh amar@hermes "sudo tail -40 /root/paperclip-install.log"
 
 Если установка всё же прервалась на середине (проверить: `ps aux | grep -i paperclip`, `ls /opt/paperclip/server/dist`, `ls /home/paperclip/.hermes`) — **не запускайте установщик заново**, он упадёт на `check_clean_install`, увидев уже установленные node/pnpm/caddy. Нужно вручную доиграть оставшиеся шаги (`install_hermes`, npm-установка агентов, `configure_caddy`, `create_service`, `paperclip_credentials`, `start_services`) — код этих функций есть в самом установщике (`curl -fsSL https://virtua.sh/i/paperclip`) и в общем `https://virtua.sh/i/common/base.sh`.
 
+**Если сборка прервалась именно во время `pnpm build` (parallel-сборка нескольких workspace-пакетов одновременно)** — некоторые пакеты могли не успеть собраться, даже если лог выглядит так, будто дошёл до конца (вывод от разных пакетов чередуется). Явный симптом: `ui/dist/` содержит статику (иконки, `assets/`), но **нет `index.html`** → сервер отвечает `Cannot GET /` (при этом `/api/health` работает нормально). Проверить и перестроить только пропущенное безопасно — `pnpm build` идемпотентен:
+
+```bash
+ssh amar@hermes 'sudo -u paperclip bash -c "setsid env NODE_OPTIONS=--max-old-space-size=3072 nohup bash -c \"cd /opt/paperclip && pnpm build\" > /home/paperclip/paperclip-rebuild.log 2>&1 < /dev/null & disown"'
+# опрашивать: ssh amar@hermes "sudo -u paperclip tail -30 /home/paperclip/paperclip-rebuild.log"
+# после завершения: ls /opt/paperclip/ui/dist/index.html && sudo systemctl restart paperclip
+```
+
+**Ещё одна вещь, которая всплывает при первом заходе в дашборд:** если открыть `https://<домен>` в браузере, Paperclip может ответить `Hostname '<домен>' is not allowed for this Paperclip instance.` — это отдельная от Caddy проверка на уровне самого приложения (`allowedHostnames` в конфиге). Если конфига ещё нет (`No config found ... Run paperclip onboard first`), сначала выполните ониординг **без интерактивных промптов** (`-y` = принять quickstart-настройки: `local_trusted`/`private`/loopback, что и нужно — приложение слушает только 127.0.0.1, наружу его пускает Caddy):
+
+```bash
+sudo -u paperclip bash -c 'cd /opt/paperclip && pnpm paperclipai onboard -y'
+```
+
+**Осторожно:** `onboard -y` в некоторых версиях CLI не просто сохраняет конфиг, а следом сам стартует `paperclipai run` в текущей сессии (доп. dev-инстанс сервера, на свободном порту, если 3100 уже занят настоящим systemd-сервисом). Если это произошло — оборвите SSH-команду и **убейте весь процесс-дерево** этого лишнего инстанса (`ps aux | grep -E 'onboard|node.*cli/src/index'`, затем `sudo kill -TERM <pids>`), не трогая настоящий `paperclip.service`. Затем добавьте домен в allowlist и перезапустите настоящий сервис:
+
+```bash
+sudo -u paperclip bash -c 'cd /opt/paperclip && pnpm paperclipai allowed-hostname hermes.amar-home.ru'
+sudo systemctl restart paperclip
+```
+
 **По ходу установки:**
 - Если установщик спросит домен — укажите `hermes.amar-home.ru`.
 - В конце установщик обычно выводит сгенерированные креды (БД, админ-токен и т.п.) и пути к конфигам — **сохраните их сразу** в менеджер паролей, повторно они могут не показаться.
