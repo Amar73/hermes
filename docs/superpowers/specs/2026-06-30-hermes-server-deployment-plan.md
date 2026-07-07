@@ -299,7 +299,7 @@ gh repo create Amar73/hermes-scripts --public --confirm
 - [x] GitHub-доступ под `amar` настроен (`gh auth login`, credential helper, `~/Amar73/{hermes,rclone,arch-niri,setup}` склонированы, push проверен) — выполнено 2026-07-05
 - [x] `dig +short hermes.amar-home.ru` → `193.228.139.46` — подтверждено 2026-07-07
 - [x] Комбо-стек (Paperclip + Hermes Agent + Caddy + Claude Code/Codex/Gemini CLI/OpenCode) установлен — выполнено 2026-07-07, см. заметку в шаге 3 про прерывание/докат установки
-- [x] `https://hermes.amar-home.ru` открывается, сертификат валиден — подтверждено 2026-07-07 (HTTP/2, basicauth возвращает 401 как и ожидалось)
+- [x] `https://hermes.amar-home.ru` открывается, сертификат валиден — подтверждено 2026-07-07 (curl: HTTP/2, basicauth 401; затем подтверждено пользователем в реальном браузере — дашборд открывается и рендерится)
 - [x] `ufw status` → активен; 80 открыт всем, 22 и 443 — только с `46.34.141.146` и `144.206.228.59` — выполнено 2026-07-07
 - [ ] Доступ по SSH/HTTPS с IP, не входящего в allowlist, действительно блокируется (проверить с третьего устройства/VPN)
 - [x] `fail2ban-client status sshd` → jail активен — выполнено 2026-07-07 (потребовалась правка: backend=systemd, т.к. на сервере нет rsyslog/`/var/log/auth.log`, см. заметку в шаге 2)
