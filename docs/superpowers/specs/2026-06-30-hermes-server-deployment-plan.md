@@ -110,6 +110,16 @@ curl -fsSL https://virtua.sh/i/paperclip | bash
 
 Установщик сам определит ветку Debian и поднимет Paperclip, Hermes, Caddy и встроенный PostgreSQL под системным пользователем `paperclip`.
 
+**Важно про долгое выполнение:** установка занимает 15-20+ минут (сборка ~31 workspace-пакета Paperclip, клонирование и установка Hermes Agent, npm-установка 4 CLI-агентов). **Не запускайте установщик в SSH-сессии, обёрнутой в `timeout`, и не полагайтесь на то, что foreground SSH-сессия доживёт до конца** — при обрыве канала процесс на сервере может упасть по broken pipe (`set -euo pipefail` в скрипте). Вместо этого запускайте отвязанно от терминала и опрашивайте лог-файл отдельными короткими SSH-подключениями:
+
+```bash
+ssh amar@hermes 'sudo bash -c "setsid env PAPERCLIP_HOST=hermes.amar-home.ru nohup bash -c \"curl -fsSL https://virtua.sh/i/paperclip | bash\" > /root/paperclip-install.log 2>&1 < /dev/null & disown; echo LAUNCHED"'
+# затем периодически:
+ssh amar@hermes "sudo tail -40 /root/paperclip-install.log"
+```
+
+Если установка всё же прервалась на середине (проверить: `ps aux | grep -i paperclip`, `ls /opt/paperclip/server/dist`, `ls /home/paperclip/.hermes`) — **не запускайте установщик заново**, он упадёт на `check_clean_install`, увидев уже установленные node/pnpm/caddy. Нужно вручную доиграть оставшиеся шаги (`install_hermes`, npm-установка агентов, `configure_caddy`, `create_service`, `paperclip_credentials`, `start_services`) — код этих функций есть в самом установщике (`curl -fsSL https://virtua.sh/i/paperclip`) и в общем `https://virtua.sh/i/common/base.sh`.
+
 **По ходу установки:**
 - Если установщик спросит домен — укажите `hermes.amar-home.ru`.
 - В конце установщик обычно выводит сгенерированные креды (БД, админ-токен и т.п.) и пути к конфигам — **сохраните их сразу** в менеджер паролей, повторно они могут не показаться.
@@ -267,7 +277,8 @@ gh repo create Amar73/hermes-scripts --public --confirm
 
 - [x] GitHub-доступ под `amar` настроен (`gh auth login`, credential helper, `~/Amar73/{hermes,rclone,arch-niri,setup}` склонированы, push проверен) — выполнено 2026-07-05
 - [x] `dig +short hermes.amar-home.ru` → `193.228.139.46` — подтверждено 2026-07-07
-- [ ] `https://hermes.amar-home.ru` открывается, сертификат валиден
+- [x] Комбо-стек (Paperclip + Hermes Agent + Caddy + Claude Code/Codex/Gemini CLI/OpenCode) установлен — выполнено 2026-07-07, см. заметку в шаге 3 про прерывание/докат установки
+- [x] `https://hermes.amar-home.ru` открывается, сертификат валиден — подтверждено 2026-07-07 (HTTP/2, basicauth возвращает 401 как и ожидалось)
 - [x] `ufw status` → активен; 80 открыт всем, 22 и 443 — только с `46.34.141.146` и `144.206.228.59` — выполнено 2026-07-07
 - [ ] Доступ по SSH/HTTPS с IP, не входящего в allowlist, действительно блокируется (проверить с третьего устройства/VPN)
 - [x] `fail2ban-client status sshd` → jail активен — выполнено 2026-07-07 (потребовалась правка: backend=systemd, т.к. на сервере нет rsyslog/`/var/log/auth.log`, см. заметку в шаге 2)
