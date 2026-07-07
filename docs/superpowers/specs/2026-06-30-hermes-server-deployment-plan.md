@@ -82,6 +82,14 @@ sudo systemctl enable --now fail2ban
 sudo fail2ban-client status sshd
 ```
 
+**Если `fail2ban` падает с ошибкой `Have not found any log file for sshd jail`:** на этом сервере (минимальный Debian-образ) нет `rsyslog`, поэтому нет `/var/log/auth.log`, который jail ищет по умолчанию. Вместо установки rsyslog переключите jail на чтение из systemd journal:
+
+```bash
+printf '[sshd]\nenabled = true\nbackend = systemd\n' | sudo tee /etc/fail2ban/jail.d/sshd-systemd-backend.local
+sudo systemctl restart fail2ban
+sudo fail2ban-client status sshd
+```
+
 Отключение входа по паролю (только ключ). Перед этим убедитесь, что ваш публичный ключ уже в `~/.ssh/authorized_keys` на сервере — раз вы заходите по `ssh amar@hermes` без пароля, скорее всего, это уже так.
 
 ```bash
@@ -260,10 +268,10 @@ gh repo create Amar73/hermes-scripts --public --confirm
 - [x] GitHub-доступ под `amar` настроен (`gh auth login`, credential helper, `~/Amar73/{hermes,rclone,arch-niri,setup}` склонированы, push проверен) — выполнено 2026-07-05
 - [x] `dig +short hermes.amar-home.ru` → `193.228.139.46` — подтверждено 2026-07-07
 - [ ] `https://hermes.amar-home.ru` открывается, сертификат валиден
-- [ ] `ufw status` → активен; 80 открыт всем, 22 и 443 — только с `46.34.141.146` и `144.206.228.59`
+- [x] `ufw status` → активен; 80 открыт всем, 22 и 443 — только с `46.34.141.146` и `144.206.228.59` — выполнено 2026-07-07
 - [ ] Доступ по SSH/HTTPS с IP, не входящего в allowlist, действительно блокируется (проверить с третьего устройства/VPN)
-- [ ] `fail2ban-client status sshd` → jail активен
-- [ ] Вход по паролю отключён, ключ работает из нового окна терминала
+- [x] `fail2ban-client status sshd` → jail активен — выполнено 2026-07-07 (потребовалась правка: backend=systemd, т.к. на сервере нет rsyslog/`/var/log/auth.log`, см. заметку в шаге 2)
+- [x] Вход по паролю отключён, ключ работает из нового окна терминала — подтверждено 2026-07-07 (новая SSH-сессия после `ufw enable` прошла успешно)
 - [ ] OpenRouter ключ в конфиге, Hermes может выполнить тестовый запрос через него
 - [ ] `claude login` — авторизован под Pro-аккаунтом
 - [ ] `gemini auth login` — авторизован под Google AI Pro
