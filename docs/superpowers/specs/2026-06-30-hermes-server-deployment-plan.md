@@ -20,6 +20,13 @@
   - Комбо-стек **не установлен**: нет пользователя/дира `paperclip`, `caddy.service` не существует, `node`/`nvm` не найдены, `/opt/` пуст, из портов слушает только 22/tcp (ssh). Шаг 3 (`curl -fsSL https://virtua.sh/i/paperclip | bash`) ещё не запускался.
   - GitHub-доступ под `amar` подтверждён как есть (см. пункт выше) — `gh auth status` залогинен как `Amar73`, 4 репозитория на месте.
 
+**Разведка реального устройства стека (2026-07-07, после завершения шага 3):**
+- Systemd-юнитов всего два: `paperclip.service` (Node/tsx-процесс + embedded Postgres) и `caddy.service`. **Отдельного `hermes`-сервиса нет** — Hermes Agent не запущен как самостоятельный демон, весь шаг 3+ план про `systemctl restart hermes` неверен буквально; везде ниже, где нужно перезапустить приложение после правки конфига, используйте `sudo systemctl restart paperclip`.
+- Hermes Agent лежит в `/home/paperclip/.hermes/hermes-agent/`. Файла `.env` там ещё нет, только `.env.example` — создаётся копированием: `sudo -u paperclip cp /home/paperclip/.hermes/hermes-agent/.env.example /home/paperclip/.hermes/hermes-agent/.env`, затем дописывается нужными ключами. Именно этот `.env` — место для `OPENROUTER_API_KEY` (шаг 5) и `TELEGRAM_BOT_TOKEN` (шаг 8), подтверждено по содержимому `.env.example`.
+- У Paperclip — отдельная, независимая от Hermes Agent конфигурация: `/home/paperclip/.paperclip/instances/default/config.json` (сервер на `127.0.0.1:3100`, `allowedHostnames: ["hermes.amar-home.ru"]`) + зашифрованное хранилище секретов (`secrets/master.key`, `secrets.provider: local_encrypted`) + свой `.env` (пока только `PAPERCLIP_AGENT_JWT_SECRET`). Ключи для org chart (шаг 10.3), скорее всего, вводятся через дашборд/API Paperclip в это зашифрованное хранилище, а не правкой файла руками — не изобретать синтаксис, проверять через UI.
+- Онбординг (`paperclipai onboard -y`, см. шаг 3) уже создал одну компанию (`72c6d782-a89c-404a-a386-cc299a77cff4`) с одним агентом с ролью `chief-of-staff` (видно в `journalctl -u paperclip`: `GET /companies/.../agents`, `GET /agents/chief-of-staff?...`). Шаг 10.3 (org chart writer/reviewer/auditor/researcher) — это, вероятно, добавление ролей/агентов в эту существующую компанию через дашборд, а не создание с нуля.
+- OAuth-логины для Claude Code / Gemini CLI / Codex под пользователем `paperclip` **ещё не выполнены** ни разу — проверено: `/home/paperclip/.claude.json` существует, но без oauth-аккаунта; `~/.config/` под `paperclip` содержит только `uv/` (Python), нет `gemini`/`codex`-директорий. Шаги 6, 7, 10.1 подтверждённо ещё в начале.
+
 Везде ниже команды на сервере выполняются после `ssh amar@hermes`, если не указано иное.
 
 ---
@@ -179,13 +186,14 @@ curl -vI https://hermes.amar-home.ru
 
 1. Зарегистрируйтесь / войдите на openrouter.ai.
 2. В Settings → Keys создайте новый API-ключ.
-3. Добавьте его в конфиг Hermes Agent на сервере (путь определён в шаге 3):
+3. Если `.env` ещё не создан из примера: `sudo -u paperclip cp /home/paperclip/.hermes/hermes-agent/.env.example /home/paperclip/.hermes/hermes-agent/.env`
+4. Добавьте ключ в `.env` Hermes Agent:
    ```bash
-   echo 'OPENROUTER_API_KEY=sk-or-...' | sudo tee -a /путь/к/.env
+   echo 'OPENROUTER_API_KEY=sk-or-...' | sudo -u paperclip tee -a /home/paperclip/.hermes/hermes-agent/.env
    ```
-4. Перезапустите сервис Hermes, чтобы он подхватил переменную (имя сервиса уточните по выводу установщика, обычно `systemctl status hermes` покажет точное имя):
+5. Перезапустите Paperclip (отдельного сервиса `hermes` нет — Hermes Agent запускается внутри процесса Paperclip):
    ```bash
-   sudo systemctl restart hermes
+   sudo systemctl restart paperclip
    ```
 
 ---
@@ -216,11 +224,11 @@ sudo -u paperclip gemini auth login
 
 ## 8. Подключение Telegram-бота
 
-Токен уже есть. Добавьте его в конфиг Hermes:
+Токен уже есть. Добавьте его в `.env` Hermes Agent:
 
 ```bash
-echo 'TELEGRAM_BOT_TOKEN=123456:ABC-...' | sudo tee -a /путь/к/.env
-sudo systemctl restart hermes
+echo 'TELEGRAM_BOT_TOKEN=123456:ABC-...' | sudo -u paperclip tee -a /home/paperclip/.hermes/hermes-agent/.env
+sudo systemctl restart paperclip
 ```
 
 Проверка токена (с локальной машины, разрешено в settings.local.json):
@@ -273,8 +281,8 @@ sudo -u paperclip codex login
 ### 10.2 Ключ Perplexity
 
 1. Создайте API-ключ в аккаунте Perplexity.
-2. Добавьте в конфиг Hermes: `echo 'PERPLEXITY_API_KEY=pplx-...' | sudo tee -a /путь/к/.env`
-3. Перезапустите сервис (имя уточните по выводу установщика): `sudo systemctl restart hermes`
+2. Добавьте в `.env` Hermes Agent: `echo 'PERPLEXITY_API_KEY=pplx-...' | sudo -u paperclip tee -a /home/paperclip/.hermes/hermes-agent/.env`
+3. Перезапустите Paperclip: `sudo systemctl restart paperclip`
 
 ### 10.3 Org chart в Paperclip
 
