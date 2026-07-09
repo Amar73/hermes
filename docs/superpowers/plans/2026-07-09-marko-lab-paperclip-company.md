@@ -318,3 +318,132 @@ Expected: a recent commit with a message related to the Telegram bot, matching w
 Check the Telegram chat for a final message from the bot summarizing what was built and linking the commit — this is the acceptance criterion for the whole plan (matches the spec's "Поток задачи" section).
 
 If any step in this task fails, debug with `sudo journalctl -u paperclip -f` and `sudo journalctl -u hermes-gateway -f` live while resending the Telegram message, rather than guessing — this is new, unverified wiring (Task 4 especially) and the first real run is the actual test of it.
+
+**(Executed 2026-07-09) Two real bugs found and fixed during this run:**
+
+1. **Provider auto-detection bug** (root-caused via systematic-debugging): every chief-of-staff run failed instantly with "No Anthropic credentials found..." because `hermes_local` mis-detected `provider=anthropic` from the `anthropic/claude-sonnet-5` model string instead of `openrouter`. Fixed by adding `"provider": "openrouter"` explicitly to both agents' `adapterConfig` (now folded back into Tasks 1 and 3 above and the Global Constraints). After the fix, chief-of-staff picked up the real Telegram-originated issue (MAR-3) and completed it for real: wrote a working `python-telegram-bot` starter (`/start`, `/help`, README, requirements.txt), committed it to `Amar73/hermes-scripts` (commit `745c2db`), and marked the issue done — confirmed via the Paperclip issues API and `gh api .../commits`.
+2. **Stale company name in chief-of-staff's instructions**: `AGENTS.md` still said "AmarIko Lab" (a leftover from onboarding) even after Task 2's rename — renaming the company via `PATCH /api/companies/{id}` does **not** touch the baked-in instructions bundle text. Fixed via `PUT /api/agents/{id}/instructions-bundle/file?path=AGENTS.md` with the string replaced. Engineer's instructions never mentioned the company name (generic template), so no fix needed there.
+
+**Known gap found and fixed (Task 8, added after Task 7 revealed it):** the design spec promised an autonomous final report delivered to Telegram, but nothing in the Task 4 wiring pushes a notification when a Paperclip issue completes — `paperclip-task-bridge` is pull-only (Hermes must be prompted to check). Chief-of-staff's actual completion report (with the commit link) was sitting in the issue's Paperclip comments the whole time, just never forwarded. See Task 8 below.
+
+---
+
+### Task 8: Push completion reports to Telegram (closes the Task 7 gap)
+
+**Problem:** confirmed via a live test — after MAR-3 completed, the user only ever received Hermes's initial "task created" acknowledgment in Telegram, never a completion report, even though chief-of-staff had written one into the issue's Paperclip comments. Closing this needs something to proactively check for newly-completed issues and push the existing report to Telegram — `hermes cron` (already available, unused until now) is the natural mechanism.
+
+**Files:**
+- Create (on server): `/home/paperclip/.hermes/scripts/notify_paperclip_done.py`
+
+**Interfaces:**
+- Consumes: `PARENT_ISSUE_ID` = `e78be65c-87a2-400c-aba0-81161c78af41` (Task 4's parent issue), `COMPANY_ID` = `72c6d782-a89c-404a-a386-cc299a77cff4`. Reads Paperclip's REST API over loopback (`http://127.0.0.1:3100`) with **no auth header** — confirmed the `local_trusted` deployment mode accepts unauthenticated reads from the loopback interface (Caddy's basicauth only gates the public hostname, not `127.0.0.1:3100` directly).
+- Produces: state file `~/.hermes/state/paperclip-notified.json` (list of already-notified issue ids) — local to this script, nothing else reads it.
+
+- [x] **Step 1: Write the script**
+
+```python
+#!/usr/bin/env python3
+"""Poll Paperclip for newly-completed MARKO Lab issues and print a Telegram-ready
+summary for each one (using the agent's own last comment as the report body).
+Intended to run via `hermes cron ... --no-agent` so stdout is delivered verbatim.
+Silent (no output) when nothing new has completed.
+"""
+import json
+import os
+import urllib.request
+from pathlib import Path
+
+BASE_URL = "http://127.0.0.1:3100"
+COMPANY_ID = "72c6d782-a89c-404a-a386-cc299a77cff4"
+PARENT_ISSUE_ID = "e78be65c-87a2-400c-aba0-81161c78af41"  # "Входящие задачи из Telegram (MARKO Lab)"
+STATE_PATH = Path.home() / ".hermes" / "state" / "paperclip-notified.json"
+TERMINAL_STATUSES = {"done", "cancelled"}
+
+
+def get_json(url):
+    with urllib.request.urlopen(url, timeout=15) as resp:
+        return json.load(resp)
+
+
+def load_state():
+    if STATE_PATH.exists():
+        try:
+            return set(json.loads(STATE_PATH.read_text()))
+        except (json.JSONDecodeError, OSError):
+            return set()
+    return set()
+
+
+def save_state(notified_ids):
+    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    STATE_PATH.write_text(json.dumps(sorted(notified_ids)))
+
+
+def latest_agent_comment(issue_id):
+    comments = get_json(f"{BASE_URL}/api/issues/{issue_id}/comments")
+    agent_comments = [c for c in comments if c.get("authorType") == "agent"]
+    if not agent_comments:
+        return None
+    agent_comments.sort(key=lambda c: c.get("createdAt", ""), reverse=True)
+    return agent_comments[0].get("body", "").strip()
+
+
+def main():
+    notified = load_state()
+    issues = get_json(
+        f"{BASE_URL}/api/companies/{COMPANY_ID}/issues?parentId={PARENT_ISSUE_ID}"
+    )
+
+    messages = []
+    newly_notified = set()
+    for issue in issues:
+        if issue["status"] not in TERMINAL_STATUSES:
+            continue
+        if issue["id"] in notified:
+            continue
+
+        report = latest_agent_comment(issue["id"]) or "(агент не оставил текстовый отчёт)"
+        messages.append(
+            f"✅ {issue['identifier']}: {issue['title']}\n"
+            f"Статус: {issue['status']}\n\n"
+            f"{report}"
+        )
+        newly_notified.add(issue["id"])
+
+    if messages:
+        save_state(notified | newly_notified)
+        print("\n\n---\n\n".join(messages))
+
+
+if __name__ == "__main__":
+    main()
+```
+
+Deploy: `scp` to the server, place at `/home/paperclip/.hermes/scripts/notify_paperclip_done.py`, `chown paperclip:paperclip`, `chmod +x`.
+
+- [x] **Step 2: Verify manually before scheduling**
+
+```bash
+ssh amar@hermes "sudo -u paperclip python3 /home/paperclip/.hermes/scripts/notify_paperclip_done.py"
+```
+
+Expected (first run, with MAR-3 already done): prints the full report for MAR-3 including the commit link. Run it a second time immediately after — expected: no output (idempotent, already recorded in the state file).
+
+- [x] **Step 3: Register the cron job**
+
+```bash
+ssh amar@hermes "sudo -u paperclip bash -lc 'cd /home/paperclip/.hermes/hermes-agent && uv run hermes cron create \"every 3m\" --name paperclip-completions --script notify_paperclip_done.py --no-agent --deliver telegram:384955770'"
+```
+
+Note: `--script` must be a bare filename (just `notify_paperclip_done.py`), not an absolute path — `hermes cron create` rejects absolute/home-relative paths and resolves everything against `~/.hermes/scripts/` itself.
+
+Verify: `hermes cron status` shows the gateway running with the job counted as active; `hermes cron list` shows it with `Deliver: telegram:384955770`.
+
+- [x] **Step 4: Force a real delivery test**
+
+```bash
+ssh amar@hermes "sudo -u paperclip rm -f /home/paperclip/.hermes/state/paperclip-notified.json"
+ssh amar@hermes "sudo -u paperclip bash -lc 'cd /home/paperclip/.hermes/hermes-agent && uv run hermes cron run <job_id>'"
+```
+
+Expected: ask the human to confirm the Telegram message actually arrived (this is the only way to check — Hermes delivers it directly, there's no server-side log of successful Telegram delivery to inspect). **Confirmed 2026-07-09**: user received the full MAR-3 report (title, status, complete agent write-up, commit link) as a Telegram message from the bot, formatted as a "Cronjob Response: paperclip-completions" message.
