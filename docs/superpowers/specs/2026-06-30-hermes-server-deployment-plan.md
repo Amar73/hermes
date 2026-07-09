@@ -350,8 +350,8 @@ gh repo create Amar73/hermes-scripts --public --confirm
 - [ ] Hermes Desktop подключается к серверу и обрабатывает тестовую голосовую команду
 - [ ] ⏸ `codex login` — ОТЛОЖЕНО 2026-07-09, та же причина
 - [x] Perplexity ключ в конфиге — записан 2026-07-09 в `.env` Hermes Agent, но пока никуда не подключён функционально (Hermes не поддерживает Perplexity как провайдера; см. заметку в шаге 10.2/10.3 — нужна ясность через дашборд Paperclip)
-- [ ] Org chart в Paperclip настроен (researcher/writer/reviewer/auditor привязаны к нужным инструментам)
-- [ ] Репозиторий `Amar73/hermes-scripts` создан, доступ для пуша с сервера настроен
+- [x] Org chart в Paperclip настроен (MARKO Lab: chief-of-staff + Engineer, both `hermes_local`/OpenRouter/`claude-sonnet-5`) — выполнено 2026-07-09, см. `docs/superpowers/plans/2026-07-09-marko-lab-paperclip-company.md`
+- [x] Репозиторий `Amar73/hermes-scripts` создан, доступ для пуша с сервера настроен — выполнено 2026-07-09, см. `docs/superpowers/plans/2026-07-09-marko-lab-paperclip-company.md`
 - [ ] Тестовая задача через Telegram проходит весь конвейер (research → write → review → audit) и коммитится в `Amar73/hermes-scripts`
 
 ---
