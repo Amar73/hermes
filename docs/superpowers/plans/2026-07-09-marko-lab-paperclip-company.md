@@ -479,3 +479,9 @@ Expected: ask the human to confirm the Telegram message actually arrived (this i
 2. The original script had no error handling around the HTTP calls — a transient failure (Paperclip restart, network blip) would have raised an uncaught traceback that `--no-agent` mode would deliver verbatim to Telegram every 3 minutes until it cleared. Fixed by wrapping the poll in try/except, logging failures to `~/.hermes/logs/paperclip-notify-errors.log` instead of stdout, and exiting 0 either way.
 
 Also cleared a stale `error` status on the Engineer agent (`POST /api/agents/{id}/clear-error`) left over from a manual verification wakeup that ran past its 300s timeout during Task 7 — unrelated to this script, but found during the same review pass.
+
+---
+
+### Task 9 (added post-hoc, 2026-07-09): spare bot token for real bot testing
+
+MAR-3's completion comment noted the agent couldn't do a real polling test of the Telegram bot it wrote ("нет живого токена бота" — no live bot token). The user supplied a spare personal bot for exactly this (`AITGWatchdog_bot`). Tried to add it as a Paperclip environment-level env var first (`PATCH /api/environments/{id}`) — blocked by a real platform limitation: `422 "Environment secret management requires a companyId context during the instance-scoped transition"` (Paperclip's env-var-on-environment API is mid-migration and doesn't accept writes right now, regardless of payload shape). Worked around it the same way as every other secret in this plan: added `TEST_TELEGRAM_BOT_TOKEN` / `TEST_TELEGRAM_BOT_USERNAME` to Hermes's `.env` (agents running via `hermes_local` already inherit this — confirmed, since `OPENROUTER_API_KEY` from the same file is how their model calls work at all). Also appended a short "Testing Telegram bots you write" section to chief-of-staff's `AGENTS.md` instructing it to actually run/poll-test bots it writes using this token, not just check they import.
