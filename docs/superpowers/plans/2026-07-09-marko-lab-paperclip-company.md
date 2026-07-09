@@ -19,6 +19,7 @@
   - "Local" environment `id` = `96dfd510-da1f-41a0-a831-5a398bc4bbed`
 - Never print secrets (API keys, bridge tokens) into git history, chat, or logs — write them straight into `.env`/`config.json` on the server and reference them by variable name afterward.
 - All server-side commands go through `ssh amar@hermes`; Hermes Agent files/commands need `sudo -u paperclip`.
+- **`hermes_local` `adapterConfig` must always set `"provider": "openrouter"` explicitly whenever `model` is an `anthropic/...`-style string.** Discovered 2026-07-09 during Task 7: leaving `provider` unset ("auto") makes Hermes mis-detect the model's `anthropic/` prefix as a request for the *native* Anthropic provider (requires `claude`/OAuth credentials we don't have) instead of routing it through OpenRouter, even though `anthropic/claude-sonnet-5` is OpenRouter's own model-id convention. Symptom: every run fails instantly with `No Anthropic credentials found...`. Tasks 1 and 3 in this plan were retroactively patched with this field after the bug surfaced — any future agent created with this same model string needs it from the start.
 
 ---
 
@@ -47,6 +48,7 @@ curl -s -u paperclip:<PASSWORD> -X PATCH \
     "adapterType": "hermes_local",
     "adapterConfig": {
       "model": "anthropic/claude-sonnet-5",
+      "provider": "openrouter",
       "toolsets": "terminal,file,web",
       "persistSession": true,
       "timeoutSec": 300
@@ -117,6 +119,7 @@ curl -s -u paperclip:<PASSWORD> -X POST \
     "adapterType": "hermes_local",
     "adapterConfig": {
       "model": "anthropic/claude-sonnet-5",
+      "provider": "openrouter",
       "toolsets": "terminal,file,web",
       "persistSession": true,
       "timeoutSec": 300
