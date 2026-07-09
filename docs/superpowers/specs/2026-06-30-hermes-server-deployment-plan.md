@@ -191,10 +191,17 @@ curl -vI https://hermes.amar-home.ru
    ```bash
    echo 'OPENROUTER_API_KEY=sk-or-...' | sudo -u paperclip tee -a /home/paperclip/.hermes/hermes-agent/.env
    ```
-5. Перезапустите Paperclip (отдельного сервиса `hermes` нет — Hermes Agent запускается внутри процесса Paperclip):
+5. Канонический путь `.env`, который использует `hermes` CLI при запуске не из каталога `hermes-agent` (например, из-под systemd-сервиса гейтвея, см. шаг 8) — `/home/paperclip/.hermes/.env`, а не `hermes-agent/.env`. Чтобы не держать два файла, сделайте симлинк один раз:
    ```bash
-   sudo systemctl restart paperclip
+   sudo -u paperclip ln -sf /home/paperclip/.hermes/hermes-agent/.env /home/paperclip/.hermes/.env
    ```
+6. Выберите модель по умолчанию (интерактивный `hermes model` не нужен — можно неинтерактивно):
+   ```bash
+   sudo -u paperclip bash -lc 'cd /home/paperclip/.hermes/hermes-agent && uv run hermes config set model anthropic/claude-sonnet-5'
+   ```
+7. Проверка: `uv run hermes status` должен показать `OpenRouter ✓`, `.env file: ✓ exists`, `Model: anthropic/claude-sonnet-5`.
+
+**(Выполнено 2026-07-07/09) Реально пройдено:** ключ работал, но первый тестовый запрос упал с `HTTP 402` — на аккаунте OpenRouter не было кредитов (нужно ≥$5 на openrouter.ai/settings/credits, бесплатных `:free` моделей на OpenRouter недостаточно для стабильной работы — они делят общий шаринговый rate-limit со всеми пользователями без ключа и падают с `HTTP 429` при малейшей нагрузке). После пополнения на $5 всё заработало.
 
 ---
 
@@ -238,7 +245,25 @@ curl https://api.telegram.org/bot<TOKEN>/getMe
 # {"ok":true,"result":{...}}
 ```
 
-Затем напишите боту в Telegram тестовое сообщение и убедитесь, что Hermes отвечает.
+**Важно, чего в исходном плане не было:** сам факт наличия токена в `.env` не заставляет бота отвечать — Telegram-гейтвей Hermes Agent является **отдельным долгоживущим процессом** (`hermes gateway`), независимым от `paperclip.service`, и после установки стека он не запущен и не установлен как systemd-сервис. Установить и запустить:
+
+```bash
+sudo bash -lc 'cd /home/paperclip/.hermes/hermes-agent && /home/paperclip/.local/bin/uv run hermes --accept-hooks gateway install --system --run-as-user paperclip --start-now'
+sudo journalctl -u hermes-gateway -f   # смотреть логи запуска/подключения к Telegram
+```
+
+Это создаёт `/etc/systemd/system/hermes-gateway.service` (постоянный, переживает перезагрузку).
+
+Затем напишите боту в Telegram тестовое сообщение — **первое сообщение от нового пользователя не получит ответа**, вместо этого бот выдаёт одноразовый pairing-код (в чате, например `3VCA7VKX`) и в логах гейтвея появляется `Unauthorized user: <telegram_id> (<name>)`. Подтвердите его на сервере:
+
+```bash
+sudo -u paperclip bash -lc 'cd /home/paperclip/.hermes/hermes-agent && uv run hermes pairing list'     # покажет отображаемый (не настоящий) код — не пытайтесь approve'ить его
+sudo -u paperclip bash -lc 'cd /home/paperclip/.hermes/hermes-agent && uv run hermes pairing approve telegram <КОД_ИЗ_ЧАТА_В_TELEGRAM>'
+```
+
+`hermes pairing list` печатает первые 8 символов хеша кода для различения записей — это **не** тот код, который нужно передавать в `approve`; настоящий код увидит только сам пользователь в чате с ботом. После approve напишите боту ещё раз — теперь должен прийти реальный ответ модели (см. шаг 5 про возможный `HTTP 402`, если на OpenRouter нет кредитов).
+
+**(Выполнено 2026-07-07/09, полностью проверено end-to-end)**: токен рабочий, гейтвей установлен и запущен, пользователь `amar` (Telegram id `384955770`) approved через pairing, после пополнения OpenRouter на $5 и модели `anthropic/claude-sonnet-5` бот отвечает в реальном Telegram-чате.
 
 ---
 
@@ -312,10 +337,10 @@ gh repo create Amar73/hermes-scripts --public --confirm
 - [ ] Доступ по SSH/HTTPS с IP, не входящего в allowlist, действительно блокируется (проверить с третьего устройства/VPN)
 - [x] `fail2ban-client status sshd` → jail активен — выполнено 2026-07-07 (потребовалась правка: backend=systemd, т.к. на сервере нет rsyslog/`/var/log/auth.log`, см. заметку в шаге 2)
 - [x] Вход по паролю отключён, ключ работает из нового окна терминала — подтверждено 2026-07-07 (новая SSH-сессия после `ufw enable` прошла успешно)
-- [ ] OpenRouter ключ в конфиге, Hermes может выполнить тестовый запрос через него
+- [x] OpenRouter ключ в конфиге, Hermes может выполнить тестовый запрос через него — выполнено 2026-07-09 (после пополнения баланса на $5; модель `anthropic/claude-sonnet-5`)
 - [ ] `claude login` — авторизован под Pro-аккаунтом
 - [ ] `gemini auth login` — авторизован под Google AI Pro
-- [ ] Тестовое сообщение в Telegram-боте получает ответ от Hermes
+- [x] Тестовое сообщение в Telegram-боте получает ответ от Hermes — выполнено 2026-07-09, полный end-to-end путь (гейтвей установлен как system-сервис `hermes-gateway`, pairing пройден для `amar`/`384955770`, реальный ответ от `claude-sonnet-5` получен в Telegram)
 - [ ] Hermes Desktop подключается к серверу и обрабатывает тестовую голосовую команду
 - [ ] `codex login` — авторизован под Pro-аккаунтом
 - [ ] Perplexity ключ в конфиге
