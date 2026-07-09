@@ -349,7 +349,8 @@ Intended to run via `hermes cron ... --no-agent` so stdout is delivered verbatim
 Silent (no output) when nothing new has completed.
 """
 import json
-import os
+import sys
+import traceback
 import urllib.request
 from pathlib import Path
 
@@ -357,7 +358,14 @@ BASE_URL = "http://127.0.0.1:3100"
 COMPANY_ID = "72c6d782-a89c-404a-a386-cc299a77cff4"
 PARENT_ISSUE_ID = "e78be65c-87a2-400c-aba0-81161c78af41"  # "Входящие задачи из Telegram (MARKO Lab)"
 STATE_PATH = Path.home() / ".hermes" / "state" / "paperclip-notified.json"
+ERROR_LOG_PATH = Path.home() / ".hermes" / "logs" / "paperclip-notify-errors.log"
 TERMINAL_STATUSES = {"done", "cancelled"}
+
+# Paperclip logs a run's raw internal prompt as an agent-authored comment when a
+# run fails before producing real output (observed directly on MAR-3's pre-fix
+# failed runs). These always start with "Query:" — skip them so a stray one
+# landing after the real report can't get picked as "the latest".
+JUNK_COMMENT_PREFIXES = ("Query:",)
 
 
 def get_json(url):
@@ -381,14 +389,19 @@ def save_state(notified_ids):
 
 def latest_agent_comment(issue_id):
     comments = get_json(f"{BASE_URL}/api/issues/{issue_id}/comments")
-    agent_comments = [c for c in comments if c.get("authorType") == "agent"]
+    agent_comments = [
+        c
+        for c in comments
+        if c.get("authorType") == "agent"
+        and not c.get("body", "").startswith(JUNK_COMMENT_PREFIXES)
+    ]
     if not agent_comments:
         return None
     agent_comments.sort(key=lambda c: c.get("createdAt", ""), reverse=True)
     return agent_comments[0].get("body", "").strip()
 
 
-def main():
+def run():
     notified = load_state()
     issues = get_json(
         f"{BASE_URL}/api/companies/{COMPANY_ID}/issues?parentId={PARENT_ISSUE_ID}"
@@ -413,6 +426,19 @@ def main():
     if messages:
         save_state(notified | newly_notified)
         print("\n\n---\n\n".join(messages))
+
+
+def main():
+    # Never let a transient failure (Paperclip restarting, network blip) surface
+    # as stdout — that would get delivered to Telegram as a raw traceback every
+    # 3 minutes until it clears. Log it locally instead and stay silent.
+    try:
+        run()
+    except Exception:
+        ERROR_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with ERROR_LOG_PATH.open("a") as f:
+            f.write(traceback.format_exc() + "\n")
+        sys.exit(0)
 
 
 if __name__ == "__main__":
@@ -447,3 +473,9 @@ ssh amar@hermes "sudo -u paperclip bash -lc 'cd /home/paperclip/.hermes/hermes-a
 ```
 
 Expected: ask the human to confirm the Telegram message actually arrived (this is the only way to check — Hermes delivers it directly, there's no server-side log of successful Telegram delivery to inspect). **Confirmed 2026-07-09**: user received the full MAR-3 report (title, status, complete agent write-up, commit link) as a Telegram message from the bot, formatted as a "Cronjob Response: paperclip-completions" message.
+
+**(Post-review fixes, 2026-07-09):** an independent review of this script (verified against MAR-3's *actual* comment history, not hypothetically) found two real gaps, both fixed in the version above before final deploy:
+1. Paperclip logs a failed run's raw internal prompt as an `authorType: "agent"` comment (two such comments exist on MAR-3, from the pre-Task-7-fix failed runs) — the original recency-only sort could pick one of these instead of the real report if a junk comment ever landed after it. Fixed by skipping any agent comment whose body starts with `"Query:"` (the observed signature of these).
+2. The original script had no error handling around the HTTP calls — a transient failure (Paperclip restart, network blip) would have raised an uncaught traceback that `--no-agent` mode would deliver verbatim to Telegram every 3 minutes until it cleared. Fixed by wrapping the poll in try/except, logging failures to `~/.hermes/logs/paperclip-notify-errors.log` instead of stdout, and exiting 0 either way.
+
+Also cleared a stale `error` status on the Engineer agent (`POST /api/agents/{id}/clear-error`) left over from a manual verification wakeup that ran past its 300s timeout during Task 7 — unrelated to this script, but found during the same review pass.
