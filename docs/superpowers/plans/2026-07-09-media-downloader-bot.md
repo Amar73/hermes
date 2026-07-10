@@ -4,6 +4,8 @@
 
 **Goal:** Ship a working Telegram bot (`@amardownloader_bot`) that downloads YouTube/Instagram videos via `yt-dlp` and sends them back in-chat, running as a systemd service on the `hermes` server.
 
+> **STATUS (2026-07-10): COMPLETE.** All 6 tasks done and verified live. `media-downloader-bot.service` is active on `hermes`, deployed at `Amar73/telegram-bots` commit `5645ab0` (matches `origin/main`). Post-plan follow-up: TikTok support added 2026-07-10 (see note after Task 6). Only open item: the server still has no global IPv6 (verified 2026-07-10 — no global address, no default IPv6 route), so YouTube videos assigned to IPv6-only CDN edges still fail; waiting on the hosting provider's reply about allocating IPv6 to the VPS.
+
 **Architecture:** Three small, independently-testable modules (`utils.py` for URL parsing/cleanup, `downloader.py` for `yt-dlp` format-selection and the actual download, `bot.py` for Telegram wiring) in a new repo `Amar73/telegram-bots`, subdirectory `media-downloader/`. Pure logic (URL extraction, format selection under the size limit) gets unit tests; the Telegram/yt-dlp I/O glue is verified by a real end-to-end run instead, since mocking Telegram's API and a live video extractor buys little confidence for a personal single-user bot.
 
 **Tech Stack:** Python 3.10+, `python-telegram-bot` 21.6, `yt-dlp`, `pytest` (dev-only), systemd.
@@ -29,7 +31,7 @@
 **Interfaces:**
 - Produces: `extract_url(text: str) -> str | None`, `is_supported_url(url: str) -> bool`, `cleanup_file(path: str) -> None`. Tasks 2 and 3 do not depend on this task's internals, only these three function signatures.
 
-- [ ] **Step 1: Initialize the repo and directory structure**
+- [x] **Step 1: Initialize the repo and directory structure**
 
 ```bash
 mkdir -p /home/amar/Amar73/telegram-bots/media-downloader/tests
@@ -37,7 +39,7 @@ cd /home/amar/Amar73/telegram-bots
 git init
 ```
 
-- [ ] **Step 2: Write `.gitignore`**
+- [x] **Step 2: Write `.gitignore`**
 
 ```
 .venv/
@@ -46,7 +48,7 @@ __pycache__/
 .env
 ```
 
-- [ ] **Step 3: Create a venv and install dev/runtime deps**
+- [x] **Step 3: Create a venv and install dev/runtime deps**
 
 ```bash
 cd /home/amar/Amar73/telegram-bots
@@ -55,7 +57,7 @@ python3 -m venv .venv
 .venv/bin/pip install pytest python-telegram-bot==21.6 yt-dlp
 ```
 
-- [ ] **Step 4: Write the failing tests**
+- [x] **Step 4: Write the failing tests**
 
 Tests import `utils` as a top-level module (not a package) and are run with
 `media-downloader/` as the working directory — the dir on disk is named
@@ -116,7 +118,7 @@ def test_cleanup_file_missing_file_does_not_raise():
     cleanup_file("/tmp/definitely-does-not-exist-12345.mp4")
 ```
 
-- [ ] **Step 5: Run tests to verify they fail**
+- [x] **Step 5: Run tests to verify they fail**
 
 Run pytest from inside `media-downloader/` (not the repo root) so `utils.py`
 is importable as a top-level module:
@@ -126,7 +128,7 @@ cd /home/amar/Amar73/telegram-bots/media-downloader
 ```
 Expected: FAIL with `ModuleNotFoundError: No module named 'utils'`.
 
-- [ ] **Step 6: Write `utils.py`**
+- [x] **Step 6: Write `utils.py`**
 
 ```python
 """URL parsing and file-cleanup helpers for the media-downloader bot."""
@@ -160,7 +162,7 @@ def cleanup_file(path: str) -> None:
         pass
 ```
 
-- [ ] **Step 7: Run tests to verify they pass**
+- [x] **Step 7: Run tests to verify they pass**
 
 ```bash
 cd /home/amar/Amar73/telegram-bots/media-downloader
@@ -168,7 +170,7 @@ cd /home/amar/Amar73/telegram-bots/media-downloader
 ```
 Expected: `9 passed`
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 cd /home/amar/Amar73/telegram-bots
@@ -188,7 +190,7 @@ git commit -m "Add URL extraction and file-cleanup utilities"
 - Consumes: nothing from Task 1.
 - Produces: `select_format(formats: list[dict], max_bytes: int) -> str | None` (pure, unit-tested), `async def download_video(url: str, output_dir: str, max_bytes: int) -> str` (returns the downloaded file's path), exception classes `VideoTooLargeError` and `DownloadFailedError`. Task 3 imports all four names from this module.
 
-- [ ] **Step 1: Write the failing tests for `select_format`**
+- [x] **Step 1: Write the failing tests for `select_format`**
 
 `media-downloader/tests/test_downloader.py`:
 ```python
@@ -255,7 +257,7 @@ def test_select_format_returns_none_when_size_unknown():
     assert select_format(formats, max_bytes=49 * MB) is None
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 cd /home/amar/Amar73/telegram-bots/media-downloader
@@ -263,7 +265,7 @@ cd /home/amar/Amar73/telegram-bots/media-downloader
 ```
 Expected: FAIL with `ModuleNotFoundError: No module named 'downloader'`.
 
-- [ ] **Step 3: Write `downloader.py`**
+- [x] **Step 3: Write `downloader.py`**
 
 ```python
 """yt-dlp wrapper: format selection under the Telegram size limit, and download."""
@@ -351,7 +353,7 @@ async def download_video(url: str, output_dir: str, max_bytes: int) -> str:
     return await loop.run_in_executor(None, _download_sync, url, output_dir, max_bytes)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 cd /home/amar/Amar73/telegram-bots/media-downloader
@@ -359,7 +361,7 @@ cd /home/amar/Amar73/telegram-bots/media-downloader
 ```
 Expected: `6 passed`
 
-- [ ] **Step 5: Manual smoke test of the real download path (not unit-tested — needs network + yt-dlp + ffmpeg)**
+- [x] **Step 5: Manual smoke test of the real download path (not unit-tested — needs network + yt-dlp + ffmpeg)**
 
 ```bash
 cd /home/amar/Amar73/telegram-bots/media-downloader
@@ -376,7 +378,7 @@ asyncio.run(main())
 ```
 Expected: prints `Downloaded to: /tmp/<uuid>.mp4`, and `ls -la /tmp/<uuid>.mp4` shows a real mp4 file under 49MB (this is "Me at the zoo", the first YouTube video ever uploaded — short, always public, stable test fixture). Delete it after confirming: `rm /tmp/*.mp4` (adjust to the actual printed filename).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /home/amar/Amar73/telegram-bots
@@ -397,7 +399,7 @@ git commit -m "Add yt-dlp format-selection and download wrapper"
 
 No unit tests for this file — it's Telegram-API glue code (handlers, message formatting) with no pure logic of its own; correctness is verified by Task 6's real end-to-end run, which is the only check that actually matters for a bot (mocking `python-telegram-bot`'s `Update`/`Context` objects would test the mock, not the bot).
 
-- [ ] **Step 1: Write `bot.py`**
+- [x] **Step 1: Write `bot.py`**
 
 ```python
 """Telegram bot: accepts YouTube/Instagram links, downloads via yt-dlp, sends the video back."""
@@ -511,7 +513,7 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 2: Verify it imports and starts cleanly with a dummy token (catches syntax/import errors without needing a real Telegram connection)**
+- [x] **Step 2: Verify it imports and starts cleanly with a dummy token (catches syntax/import errors without needing a real Telegram connection)**
 
 ```bash
 cd /home/amar/Amar73/telegram-bots/media-downloader
@@ -522,7 +524,7 @@ print('bot module imported OK, main() is callable:', callable(bot.main))
 ```
 Expected: `bot module imported OK, main() is callable: True` (importing must not raise — this catches typos/missing-import bugs before deploying to the server).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 cd /home/amar/Amar73/telegram-bots
@@ -539,14 +541,14 @@ git commit -m "Add Telegram bot handlers"
 - Create: `/home/amar/Amar73/telegram-bots/media-downloader/.env.example`
 - Create: `/home/amar/Amar73/telegram-bots/README.md`
 
-- [ ] **Step 1: Write `requirements.txt`**
+- [x] **Step 1: Write `requirements.txt`**
 
 ```
 python-telegram-bot==21.6
 yt-dlp
 ```
 
-- [ ] **Step 2: Write `.env.example`**
+- [x] **Step 2: Write `.env.example`**
 
 ```
 # Telegram bot token from @BotFather (https://t.me/BotFather)
@@ -556,7 +558,7 @@ TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
 DOWNLOAD_DIR=/tmp/media-downloader
 ```
 
-- [ ] **Step 3: Write `README.md`**
+- [x] **Step 3: Write `README.md`**
 
 ```markdown
 # telegram-bots
@@ -600,7 +602,7 @@ an available format under that size, the bot says so rather than sending a
 truncated/corrupted file.
 ```
 
-- [ ] **Step 4: Create the GitHub repo and push**
+- [x] **Step 4: Create the GitHub repo and push**
 
 ```bash
 gh repo create Amar73/telegram-bots --private --description "Personal Telegram bots" --confirm
@@ -612,7 +614,7 @@ git remote add origin https://github.com/Amar73/telegram-bots.git
 git push -u origin main
 ```
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 ```bash
 gh repo view Amar73/telegram-bots --json name,visibility,defaultBranchRef
@@ -625,7 +627,7 @@ Expected: `"name": "telegram-bots"`, `"visibility": "PRIVATE"`, `defaultBranchRe
 
 **Files:** None (server-side only; code already pushed in Task 4).
 
-- [ ] **Step 1: Check/install system dependencies**
+- [x] **Step 1: Check/install system dependencies**
 
 ```bash
 ssh amar@hermes "python3 --version; which ffmpeg || echo MISSING_FFMPEG"
@@ -635,14 +637,14 @@ If ffmpeg is missing:
 ssh amar@hermes "sudo apt install -y ffmpeg"
 ```
 
-- [ ] **Step 2: Clone the repo and set up the venv**
+- [x] **Step 2: Clone the repo and set up the venv**
 
 ```bash
 ssh amar@hermes "git clone https://github.com/Amar73/telegram-bots.git ~/Amar73/telegram-bots"
 ssh amar@hermes "cd ~/Amar73/telegram-bots && python3 -m venv .venv && .venv/bin/pip install -r media-downloader/requirements.txt"
 ```
 
-- [ ] **Step 3: Write the `.env` file on the server (token never goes in git)**
+- [x] **Step 3: Write the `.env` file on the server (token never goes in git)**
 
 ```bash
 ssh amar@hermes 'cat > ~/Amar73/telegram-bots/media-downloader/.env <<EOF
@@ -650,7 +652,7 @@ TELEGRAM_BOT_TOKEN=<AMARDOWNLOADER_BOT_TOKEN>
 EOF'
 ```
 
-- [ ] **Step 4: Create the systemd unit**
+- [x] **Step 4: Create the systemd unit**
 
 ```bash
 ssh amar@hermes 'sudo tee /etc/systemd/system/media-downloader-bot.service >/dev/null <<EOF
@@ -672,7 +674,7 @@ WantedBy=multi-user.target
 EOF'
 ```
 
-- [ ] **Step 5: Start and verify**
+- [x] **Step 5: Start and verify**
 
 ```bash
 ssh amar@hermes "sudo systemctl daemon-reload && sudo systemctl enable --now media-downloader-bot"
@@ -681,7 +683,7 @@ ssh amar@hermes "sudo journalctl -u media-downloader-bot --no-pager -n 20"
 ```
 Expected: `active`, log line `Starting media-downloader bot (polling)...` with no traceback after it.
 
-- [ ] **Step 6: Copy the systemd unit into the repo for documentation, commit**
+- [x] **Step 6: Copy the systemd unit into the repo for documentation, commit**
 
 ```bash
 ssh amar@hermes "cat /etc/systemd/system/media-downloader-bot.service" > /home/amar/Amar73/telegram-bots/media-downloader/media-downloader-bot.service
@@ -700,29 +702,29 @@ git push
 
 **Files:** None — live behavioral test.
 
-- [ ] **Step 1: Send `/start` and `/help` to `@amardownloader_bot`**
+- [x] **Step 1: Send `/start` and `/help` to `@amardownloader_bot`**
 
 Expected: both commands reply with the Russian text from `bot.py`.
 
-- [ ] **Step 2: Send a real YouTube link**
+- [x] **Step 2: Send a real YouTube link**
 
 Send `https://www.youtube.com/watch?v=jNQXAC9IVRw` (short, always-public test video).
 
 Expected: "Скачиваю…" → "Загружаю…" → "Готово", then a video file arrives with caption `Скачано из: https://www.youtube.com/watch?v=jNQXAC9IVRw`.
 
-- [ ] **Step 3: Send a real Instagram Reel link**
+- [x] **Step 3: Send a real Instagram Reel link**
 
 Send any public Instagram Reel URL.
 
 Expected: same flow. If Instagram extraction fails (yt-dlp's Instagram support is fragile and sometimes needs cookies for content Instagram rate-limits) — this is a known, real risk (see spec) — check `sudo journalctl -u media-downloader-bot -f` for the actual `DownloadFailedError` detail before assuming it's a code bug; note the failure mode here rather than debugging blind if it happens.
 
-- [ ] **Step 4: Send an unsupported link**
+- [x] **Step 4: Send an unsupported link**
 
 Send `https://vimeo.com/12345`.
 
 Expected: bot replies with the "не поддерживается" message, no crash.
 
-- [ ] **Step 5: Confirm temp files are cleaned up**
+- [x] **Step 5: Confirm temp files are cleaned up**
 
 ```bash
 ssh amar@hermes "ls /tmp/media-downloader/"
@@ -735,3 +737,9 @@ Expected: empty (or only files from a run currently in flight) — confirms `cle
 2. **Instagram: every Reel rejected as "too large" regardless of actual size.** Root cause (inspected real format list via yt-dlp's `extract_info` for a real Reel): Instagram's DASH manifests have **no progressive format at all** (video-only WebM-in-mp4 streams + a separate audio-only m4a track, never combined) and **never report `filesize`/`filesize_approx`** on any format. `select_format()`'s progressive-with-known-size requirement (correct and by design for YouTube) always returned `None` for Instagram, and `_download_sync` treated "no format found" as unconditionally "too large" — even for a 14MB Reel, far under the 50MB limit. Fixed by adding a fallback path in `_download_sync`: when `select_format` finds nothing, use yt-dlp's own `bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best` selector with `merge_output_format: "mp4"` (ffmpeg muxes the separate streams), then check the actual file size **after** downloading (the only point it's knowable for this kind of source) and reject/delete only then if it's still too big. Verified against 3 real Reels that had all previously failed — one now downloads successfully at 14,962,986 bytes.
 
 Both fixes are in `downloader.py`, deployed and confirmed live (not just unit-tested) against real Telegram traffic from the user. `select_format`'s existing unit tests (Task 2) were unaffected — the bug was entirely in `_download_sync`'s handling of `select_format`'s `None` return, not in `select_format` itself.
+
+---
+
+### Post-plan update (2026-07-10): TikTok support
+
+Added out of plan scope (commit `5645ab0` in `Amar73/telegram-bots`): `tiktok.com` appended to `SUPPORTED_DOMAINS` — the substring match also covers short links like `vt.tiktok.com`. No changes to `select_format`/`downloader.py` were needed: TikTok serves progressive formats with real filesizes, same shape as YouTube. Known non-bugs found while testing: (a) TikTok blocks some individual posts from unauthenticated access entirely ("Your IP address is blocked from accessing this post") — confirmed per-post, not an IP-reputation issue, by reproducing identically from two different networks; (b) TikTok photo/slideshow posts (`/photo/...` URLs) are unsupported by yt-dlp's extractor. Both surface as the bot's normal "не удалось скачать видео" error — expected, nothing to debug if they recur.
