@@ -94,15 +94,30 @@ hermes.marko-lab.com {
 
 ## Чек-лист готовности
 
-- [ ] Временный `NOPASSWD` sudo снят после установки
-- [ ] `ufw status verbose` — 80 открыт всем, 22 и 443 — только с 5 согласованных IP
-- [ ] `fail2ban-client status sshd` — jail активен (backend systemd)
-- [ ] `unattended-upgrades` включены
-- [ ] `claude --version` работает, `claude auth login` пройден
-- [ ] `agy --version` (или актуальное имя команды) работает, авторизация пройдена
-- [ ] Hermes Agent: `hermes status` показывает рабочего провайдера и `.env` найден
-- [ ] Web-search через Perplexity подтверждён рабочим тестовым запросом
-- [ ] `hermes-gateway.service` активен, Telegram-бот отвечает после pairing
-- [ ] `https://hermes.marko-lab.com` открывается с валидным сертификатом, редирект с HTTP работает
-- [ ] `~/Amar73/hermes` склонирован на сервере, `gh auth status` залогинен, тестовый push/pull проходит
-- [ ] Этот спек и план внедрения закоммичены и запушены в `Amar73/hermes`
+- [x] Временный `NOPASSWD` sudo снят после установки — 2026-07-17, `sudo -n` снова требует пароль
+- [x] `ufw status verbose` — 80 открыт всем, 22 и 443 — только с 5 согласованных IP — проверено 2026-07-17
+- [x] `fail2ban-client status sshd` — jail активен (backend systemd), за первые часы уже забанил 2 IP — проверено 2026-07-17
+- [x] `unattended-upgrades` включены — active
+- [x] `claude --version` (2.1.212) работает, `claude auth login` пройден — loggedIn, subscriptionType pro, аккаунт a.marianenko.73@gmail.com
+- [x] `agy --version` (1.1.3, имя команды подтвердилось) работает, OAuth пройден как a.maryanenko@gmail.com — **но инференс заблокирован**, см. «Реально сделано» п.2
+- [x] Hermes Agent: `hermes status` — OpenRouter ✓, модель `anthropic/claude-sonnet-5`, `.env` ✓, живой запрос через OpenRouter проверен
+- [x] Web-search подтверждён рабочим тестовым запросом — **но через ddgs, а не Perplexity**, см. «Реально сделано» п.3
+- [x] `hermes-gateway.service` активен, Telegram-бот @AmarAiAgent_bot отвечает после pairing (amar/384955770), home channel установлен
+- [x] `https://hermes.marko-lab.com` — валидный LE-сертификат, Caddy basic-auth (401 без пароля / 200 с), дашборд за ним
+- [x] `~/Amar73/hermes` склонирован на сервере (9e2b4aa), `gh auth status` — Amar73, fetch проходит
+- [x] Спек и план закоммичены и запушены в `Amar73/hermes`
+
+## Реально сделано (сверка по итогам развёртывания, 2026-07-17)
+
+Отклонения и находки относительно плана:
+
+1. **Sudoers-ловушка**: на сервере уже существовал `/etc/sudoers.d/amar` (`amar ALL=(ALL:ALL) ALL`, к тому же с неверными правами 0644). Файлы в `sudoers.d` читаются по алфавиту, и последнее совпавшее правило побеждает — временный `99-amar-temp` (NOPASSWD) молча перебивался файлом `amar`. Решение: временный файл назван `zzz-amar-temp`, чтобы сортироваться последним; права `amar` исправлены на 0440. После завершения работ `zzz-amar-temp` удалён.
+2. **Antigravity CLI — инференс заблокирован Google-ом**: установка и OAuth прошли (`agy` 1.1.3, аккаунт a.maryanenko@gmail.com с активной Google AI Pro), но каждый запрос отклоняется `Eligibility check failed: unknown reason`. Известная массовая проблема (форум Google AI Developers, июнь–июль 2026), на сервере не лечится — нужен appeal в Google / другой аккаунт / ждать. Сбор Interactions data при онбординге отключён по решению пользователя. Отдельная деталь: подкоманды `agy auth login` нет — логин запускается голым `agy` (TUI).
+3. **Perplexity web-search невозможен в Hermes 0.18.2**: «кастомный OpenAI-совместимый backend» из документации оказался нереализованной фичей (issue #12832). Реально поддерживаются только встроенные плагины: firecrawl, parallel, tavily, exa, searxng, brave-free, ddgs, xai; `custom_providers` в config.yaml — только для LLM-инференса, не для поиска. По решению пользователя оставлен `ddgs` (DuckDuckGo, без ключа), закреплён явно: `web.backend: ddgs`. `PERPLEXITY_API_KEY` лежит в `~/.hermes/.env` про запас, ничем не используется. Если Perplexity понадобится — придётся писать свой `WebSearchProvider`-плагин по образцу `plugins/web/xai/provider.py`.
+4. **Nous Portal**: `hermes setup --portal` запускает OAuth к порталу Nous; пользователь подтвердил подключение в браузере, сессия сохранилась, но кредитов на ней 0 — она неактивна и не мешает, рабочий провайдер OpenRouter.
+5. **Дашборд — отдельный сервис, которого не было в плане**: `hermes dashboard` (127.0.0.1:9119) не запускается сам; создан юнит `/etc/systemd/system/hermes-dashboard.service` (User=amar, `--no-open --skip-build`, enabled). Первая сборка web UI выполнена отдельно перед установкой юнита.
+6. **Caddy — два нюанса**: (а) добавлен basic-auth (`basic_auth`, Caddy 2.11.4; логин `amar`, пароль у пользователя в менеджере паролей) как второй слой поверх IP-allowlist; (б) потребовался `header_up Host 127.0.0.1` в `reverse_proxy` — иначе защита Hermes от DNS-rebinding отвечает 400 даже с верной авторизацией.
+7. **Telegram**: тот же бот @AmarAiAgent_bot, что на старом сервере; старый `hermes-gateway` на 193.228.139.46 остановлен и отключён пользователем до запуска нового (иначе конфликт long-polling). Ловушка: в шаблоне `~/.hermes/.env` есть закомментированный `# TELEGRAM_BOT_TOKEN=` — проверка «ключ уже есть» по простому grep ловит комментарий; сверять по `^TELEGRAM_BOT_TOKEN=`. Gateway ставится с sudo: `hermes --accept-hooks gateway install --system --run-as-user amar --start-now`.
+8. **PATH-нюансы**: нативный установщик Claude Code не дописал PATH в `.bashrc` (сделано вручную); `uv` у Hermes лежит в `~/.hermes/bin`, не в `~/.local/bin`; неинтерактивный `ssh ovh 'cmd'` не видит эти пути из-за early-return в Debian `.bashrc` — нужен префикс `export PATH="$HOME/.local/bin:$HOME/.hermes/bin:$PATH"`.
+9. **Одношотовый запуск Hermes**: `echo ... | hermes` не работает (TUI закрывается), правильно `hermes -z "..."`.
+10. **tmux не входил в базовые пакеты** — доставлен по ходу (нужен для всех headless-OAuth-флоу).
