@@ -29,7 +29,7 @@
 **Interfaces:**
 - Produces: `git`, `build-essential`, `curl`, `ca-certificates`, `unzip` available on `PATH` for all later tasks.
 
-- [ ] **Step 1: Update package index and upgrade existing packages**
+- [x] **Step 1: Update package index and upgrade existing packages**
 
 Run:
 ```bash
@@ -37,7 +37,7 @@ ssh ovh 'sudo apt update && sudo DEBIAN_FRONTEND=noninteractive apt upgrade -y'
 ```
 Expected: exits 0, ends with something like `0 upgraded, 0 newly installed` or a list of upgraded packages, no `E:` errors.
 
-- [ ] **Step 2: Install base packages**
+- [x] **Step 2: Install base packages**
 
 Run:
 ```bash
@@ -45,7 +45,7 @@ ssh ovh 'sudo apt install -y git build-essential curl ca-certificates unzip'
 ```
 Expected: exits 0, `git`, `gcc`, `make`, `curl`, `unzip` end up installed.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 Run:
 ```bash
@@ -63,7 +63,7 @@ Expected: four version lines print, no "command not found".
 - Consumes: nothing from earlier tasks.
 - Produces: active `ufw` with default-deny incoming; ports 22 and 443 reachable only from the 5 allowlisted IPs; port 80 open to all.
 
-- [ ] **Step 1: Install ufw**
+- [x] **Step 1: Install ufw**
 
 Run:
 ```bash
@@ -71,7 +71,7 @@ ssh ovh 'sudo apt install -y ufw'
 ```
 Expected: exits 0.
 
-- [ ] **Step 2: Set default policies (before enabling — safe, doesn't cut current session)**
+- [x] **Step 2: Set default policies (before enabling — safe, doesn't cut current session)**
 
 Run:
 ```bash
@@ -79,7 +79,7 @@ ssh ovh 'sudo ufw default deny incoming && sudo ufw default allow outgoing'
 ```
 Expected: `Default incoming policy changed to 'deny'`, `Default outgoing policy changed to 'allow'`.
 
-- [ ] **Step 3: Allow port 80 from anywhere (ACME)**
+- [x] **Step 3: Allow port 80 from anywhere (ACME)**
 
 Run:
 ```bash
@@ -87,7 +87,7 @@ ssh ovh 'sudo ufw allow 80/tcp'
 ```
 Expected: `Rule added`.
 
-- [ ] **Step 4: Allow 22/tcp and 443/tcp from each of the 5 allowlisted IPs**
+- [x] **Step 4: Allow 22/tcp and 443/tcp from each of the 5 allowlisted IPs**
 
 Run:
 ```bash
@@ -100,7 +100,7 @@ done
 ```
 Expected: 10 `Rule added` lines (2 per IP).
 
-- [ ] **Step 5: Enable ufw**
+- [x] **Step 5: Enable ufw**
 
 Run:
 ```bash
@@ -108,7 +108,7 @@ ssh ovh 'sudo ufw --force enable'
 ```
 Expected: `Firewall is active and enabled on system startup`.
 
-- [ ] **Step 6: Verify from a fresh SSH connection (not reusing an existing multiplexed session)**
+- [x] **Step 6: Verify from a fresh SSH connection (not reusing an existing multiplexed session)**
 
 Run:
 ```bash
@@ -126,7 +126,7 @@ Expected: prints `still reachable`, then ufw status shows `Status: active`, port
 - Consumes: nothing from earlier tasks (independent of Task 2).
 - Produces: active `fail2ban` service with a working `sshd` jail.
 
-- [ ] **Step 1: Install fail2ban**
+- [x] **Step 1: Install fail2ban**
 
 Run:
 ```bash
@@ -134,7 +134,7 @@ ssh ovh 'sudo apt install -y fail2ban'
 ```
 Expected: exits 0.
 
-- [ ] **Step 2: Pre-empt the missing-rsyslog issue by setting the sshd jail's backend to systemd before first start**
+- [x] **Step 2: Pre-empt the missing-rsyslog issue by setting the sshd jail's backend to systemd before first start**
 
 Run:
 ```bash
@@ -142,7 +142,7 @@ ssh ovh "printf '[sshd]\nenabled = true\nbackend = systemd\n' | sudo tee /etc/fa
 ```
 Expected: prints the 3 lines back (tee echoes to stdout).
 
-- [ ] **Step 3: Enable and start fail2ban**
+- [x] **Step 3: Enable and start fail2ban**
 
 Run:
 ```bash
@@ -150,7 +150,7 @@ ssh ovh 'sudo systemctl enable --now fail2ban'
 ```
 Expected: exits 0, no error output.
 
-- [ ] **Step 4: Verify the sshd jail is active**
+- [x] **Step 4: Verify the sshd jail is active**
 
 Run:
 ```bash
@@ -168,7 +168,7 @@ Expected: `Status for the jail: sshd` block with `Currently failed`, `Total fail
 - Consumes: nothing from earlier tasks.
 - Produces: automatic security updates applied going forward.
 
-- [ ] **Step 1: Install and enable**
+- [x] **Step 1: Install and enable**
 
 Run:
 ```bash
@@ -176,7 +176,7 @@ ssh ovh 'sudo apt install -y unattended-upgrades && sudo systemctl enable --now 
 ```
 Expected: exits 0.
 
-- [ ] **Step 2: Verify the timer/service is active**
+- [x] **Step 2: Verify the timer/service is active**
 
 Run:
 ```bash
@@ -646,3 +646,52 @@ Expected: shows the same commit hash just pushed from the local machine.
 - **Spec coverage:** Task 1↔base packages, Task 2↔ufw/allowlist, Task 3↔fail2ban, Task 4↔unattended-upgrades, Task 5↔Claude Code, Task 6↔Antigravity CLI, Task 7↔Hermes Agent base install, Task 8↔Perplexity web-search, Task 9↔Telegram gateway, Task 10↔Caddy/domain, Task 11↔GitHub repo sync, Task 12↔checklist closeout. All spec sections have a task.
 - **Known open question carried forward, not hidden:** Task 8's exact `web.backend` config key is uncertain per the design spec's own caveat — Task 8 Step 1 makes checking the real CLI output a hard prerequisite before writing config, rather than guessing silently.
 - **Command name uncertainty carried forward:** Task 6 Step 2 explicitly checks whether `agy` is the right binary name rather than assuming it.
+
+---
+
+## Execution Record — 2026-07-20 (Tasks 1–4)
+
+Verified on the live server and marked complete. Two constraints in this document turned out to be wrong; corrections below.
+
+### Correction 1: `ssh ovh` does not apply
+
+The plan assumes every command runs as `ssh ovh '<cmd>'`. In practice the Claude Code session for this project runs **on `51.75.66.60` itself** (hostname `vps-caef402f`), and there is no `ovh` alias in `/etc/hosts` or `~/.ssh/config` there — `ssh ovh` fails with "Could not resolve hostname ovh". Run the commands directly, without the wrapper. Check `hostname -I` before assuming otherwise.
+
+### Correction 2: the sudoers grant is `/etc/sudoers.d/amar`, and it is not temporary
+
+The Global Constraints name a temporary grant at `/etc/sudoers.d/99-amar-temp` that Task 12 removes. **That file does not exist.** What exists is `/etc/sudoers.d/amar` (`amar ALL=(ALL:ALL) NOPASSWD:ALL`, created 2026-07-20 07:35) — same effect, different path, and nothing in this plan removes it. Task 12's cleanup step targets the wrong filename and would silently no-op. Decide explicitly whether passwordless sudo for `amar` is intended to be permanent; if not, the file to remove is `/etc/sudoers.d/amar`.
+
+### Correction 3: leftover cloud-init `debian` account
+
+`/etc/sudoers.d/90-cloud-init-users` grants `debian ALL=(ALL) NOPASSWD:ALL`. The `debian` account (uid 1000) has a **set, usable password** (`passwd -S` → `P`) and an **empty** `~/.ssh/authorized_keys`. It was genuinely used: `Accepted password for debian` from `46.34.141.146` and `178.250.191.152` on 2026-07-17, i.e. it was the initial provisioning login before user `amar` existed.
+
+Not currently exploitable remotely — SSH password auth is now off (see hardening item 2 below) and there are no keys on the account — so this is a cleanup item, not an active hole. Recommended once `amar` access is confirmed stable: `sudo passwd -l debian` to lock the password, or remove the account and its sudoers file outright. Not done in this session: deleting the account cloud-init created is out of scope for a firewall task and deserves its own decision.
+
+### Verified state
+
+| Task | Status | Evidence |
+|---|---|---|
+| 1 — base packages | done | `git 1:2.47.3`, `build-essential 12.12`, `curl 8.14.1`, `ca-certificates 20250419`, `unzip 6.0-29` all `ii` |
+| 2 — ufw allowlist | done | active, INPUT policy DROP on v4 **and** v6; 80/tcp all; 22+443/tcp from the 5 listed IPs; `ENABLED=yes` in `/etc/ufw/ufw.conf` |
+| 3 — fail2ban | done | `sshd` jail up on `backend=systemd`, journal matches working, 2 bans to date |
+| 4 — unattended-upgrades | done | package 2.12, `enabled` + `active` |
+
+Note: `systemctl is-active ufw` reports `inactive (dead)` — this is normal for Debian's oneshot `ufw.service` and is **not** a fault. The real checks are `ufw status` (active), `iptables -S INPUT` (policy DROP), and `ENABLED=yes` in `/etc/ufw/ufw.conf`.
+
+### Additional hardening applied beyond the plan
+
+1. **Jitsi `web` container port 8443 was publicly exposed.** Docker writes DNAT rules into `nat/PREROUTING`, which bypasses the INPUT chain where ufw filters — so `0.0.0.0:8443->443/tcp` answered HTTP 200 from the internet while `ufw status` listed no such rule. Fixed by setting `HTTPS_PORT=127.0.0.1:8443` in `/opt/jitsi-meet/.env` (backup: `.env.bak-2026-07-20`) and recreating the container. External `:8443` now refuses; `https://meet.marko-lab.com:50443` still returns 200.
+
+   **Audit rule going forward:** after adding any container with published ports, check `sudo iptables -t nat -S DOCKER | grep DNAT` — *not* `ufw status` — to see what is actually reachable. Only `10000/udp` (JVB) is intentionally exposed this way.
+
+2. **SSH is now key-only.** `/etc/ssh/sshd_config.d/50-cloud-init.conf` ships `PasswordAuthentication yes` and was overriding the `no` in the main config. Added `/etc/ssh/sshd_config.d/10-hardening.conf` (`PasswordAuthentication no`, `KbdInteractiveAuthentication no`, `PermitRootLogin no`) — the `10-` prefix wins because sshd keeps the first value it sees. Confirmed via `sshd -T`; recent `Accepted publickey` entries exist for all 5 allowlisted IPs, so no lockout risk.
+
+3. **fail2ban tuned and a Caddy jail added** — `/etc/fail2ban/jail.d/hardening.local`: bantime 1h with `bantime.increment` (factor 2, cap 1w), the 5 trusted IPs in `ignoreip`, `sshd` maxretry 4. New jail `caddy-status` uses `/etc/fail2ban/filter.d/caddy-status.conf` to ban 15× 401/403/404 within 10m. Ban enforcement verified end-to-end (rule appears in `nft list table inet f2b-table`).
+
+4. **Caddy access logging enabled** (prerequisite for the jail above — there was none). Both sites now `import accesslog` writing JSON to `/var/log/caddy/access.log`, rolling at 10 MiB × 5. Backup: `/etc/caddy/Caddyfile.bak-2026-07-20`.
+
+   Two traps worth recording: the log file must be owned by `caddy:caddy` or `systemctl reload caddy` fails with HTTP 400 "permission denied"; and fail2ban strips the timestamp it matched via `datepattern` before applying `failregex`, so `^`-anchored patterns against JSON log lines never match.
+
+### Drift from the plan's assumptions
+
+The Caddyfile no longer serves `hermes.marko-lab.com` (the plan's Task 10 target). Current sites are `meet.marko-lab.com:50443` (Jitsi) and `claude.marko-lab.com` (proxying `127.0.0.1:3001`). Tasks 5–12 should be re-read against the live server before execution rather than assumed still accurate.
