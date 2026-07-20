@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-This repository (`hermes`) is currently empty — no source code, build configuration, or documentation exists yet. There is nothing to build, lint, or test.
+This repository (`ClaudeOVH`, formerly `hermes`) is currently empty — no source code, build configuration, or documentation exists yet. There is nothing to build, lint, or test.
 
 When code is added to this project, update this file with:
 - Build, lint, and test commands (including how to run a single test)
@@ -12,8 +12,8 @@ When code is added to this project, update this file with:
 
 ## Память Claude Code (auto-memory)
 
-Директория памяти этого проекта — `~/.claude/projects/-home-amar-Amar73-hermes/memory/` —
-является клоном приватного репозитория `Amar73/claude-memory-hermes` и синхронизируется
+Директория памяти этого проекта — `~/.claude/projects/-home-amar-Amar73-ClaudeOVH/memory/` —
+является клоном приватного репозитория `Amar73/claude-memory-ClaudeOVH` и синхронизируется
 между машинами вручную через git:
 
 - **В начале сессии** (если на этой машине давно не работал): сделай `git pull` в этой директории.
