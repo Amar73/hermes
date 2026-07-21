@@ -665,7 +665,9 @@ The Global Constraints name a temporary grant at `/etc/sudoers.d/99-amar-temp` t
 
 `/etc/sudoers.d/90-cloud-init-users` grants `debian ALL=(ALL) NOPASSWD:ALL`. The `debian` account (uid 1000) has a **set, usable password** (`passwd -S` → `P`) and an **empty** `~/.ssh/authorized_keys`. It was genuinely used: `Accepted password for debian` from `46.34.141.146` and `178.250.191.152` on 2026-07-17, i.e. it was the initial provisioning login before user `amar` existed.
 
-Not currently exploitable remotely — SSH password auth is now off (see hardening item 2 below) and there are no keys on the account — so this is a cleanup item, not an active hole. Recommended once `amar` access is confirmed stable: `sudo passwd -l debian` to lock the password, or remove the account and its sudoers file outright. Not done in this session: deleting the account cloud-init created is out of scope for a firewall task and deserves its own decision.
+Not currently exploitable remotely — SSH password auth is now off (see hardening item 2 below) and there are no keys on the account — so this was a cleanup item, not an active hole.
+
+**Resolved 2026-07-21:** `sudo passwd -l debian` — the account's password is now locked (`passwd -S` → `L`), removing the last login path (no password, no keys, SSH password auth off). Confirmed first that nothing depends on it: no running processes, no crontab, no systemd unit runs as `debian`, and it owns no files outside `/home/debian`. The `NOPASSWD:ALL` line in `/etc/sudoers.d/90-cloud-init-users` was left in place — harmless with no way to log in as `debian` — and the account itself was **not** deleted (only locking was requested; deleting the cloud-init account is a separate decision).
 
 ### Verified state
 
