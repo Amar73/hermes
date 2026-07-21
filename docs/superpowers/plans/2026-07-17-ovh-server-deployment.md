@@ -17,7 +17,7 @@
 - Hermes dashboard binds `127.0.0.1:9119`; Hermes gateway API binds `127.0.0.1:8642`. Neither is ever exposed on a public interface — only Caddy reverse-proxies the dashboard.
 - No Codex CLI, no Paperclip, no multi-agent org-chart pipeline in this round.
 - `git@github.com:Amar73/hermes.git` is the repo of record; git identity on any machine touching it is `Andrey Maryanenko <a.maryanenko@gmail.com>`.
-- A temporary passwordless-sudo grant already exists at `/etc/sudoers.d/99-amar-temp` (`amar ALL=(ALL) NOPASSWD: ALL`) — every `sudo` command in this plan relies on it being present, and the final task removes it.
+- Passwordless sudo for `amar` is a **permanent, intended** setting, at `/etc/sudoers.d/amar` (`amar ALL=(ALL:ALL) NOPASSWD:ALL`, `0440`). Every `sudo` command in this plan relies on it, and it stays after deployment — Claude Code sessions run on the server and do sudo work non-interactively, so a password prompt would hang them. (Decided 2026-07-21; earlier drafts of this plan wrongly framed it as temporary scaffolding to be removed — see Correction 2.)
 - Do not run destructive ufw/sshd changes without verifying the current session's source IP is on the allowlist first (already confirmed: `178.250.191.152`).
 
 ---
@@ -594,14 +594,9 @@ Expected: shows the latest commit (the design spec added earlier in this project
 - Consumes: the full checklist from the design spec's "Чек-лист готовности" section.
 - Produces: a closed-out, committed, pushed record of the real end state — matching what the previous deployment's spec did.
 
-- [ ] **Step 1: Remove the temporary NOPASSWD sudo grant**
+- [x] **Step 1: Passwordless sudo grant — keep (not removed)**
 
-Run:
-```bash
-ssh ovh 'sudo rm /etc/sudoers.d/99-amar-temp'
-ssh ovh 'sudo -n true; echo "exit code: $?"'
-```
-Expected: second command prints a password-required error to stderr and `exit code: 1` (proving passwordless sudo is gone).
+Superseded 2026-07-21. This step originally removed a "temporary" NOPASSWD grant, but passwordless sudo for `amar` was decided to be permanent (see the Global Constraints note and Correction 2) — the server's Claude Code sessions do sudo work non-interactively and a password prompt would hang them. The grant at `/etc/sudoers.d/amar` is left in place deliberately. Nothing to run.
 
 - [ ] **Step 2: Run the full checklist from the design spec and record real results**
 
@@ -659,7 +654,9 @@ The plan assumes every command runs as `ssh ovh '<cmd>'`. In practice the Claude
 
 ### Correction 2: the sudoers grant is `/etc/sudoers.d/amar`, and it is not temporary
 
-The Global Constraints name a temporary grant at `/etc/sudoers.d/99-amar-temp` that Task 12 removes. **That file does not exist.** What exists is `/etc/sudoers.d/amar` (`amar ALL=(ALL:ALL) NOPASSWD:ALL`, created 2026-07-20 07:35) — same effect, different path, and nothing in this plan removes it. Task 12's cleanup step targets the wrong filename and would silently no-op. Decide explicitly whether passwordless sudo for `amar` is intended to be permanent; if not, the file to remove is `/etc/sudoers.d/amar`.
+Earlier drafts named a temporary grant at `/etc/sudoers.d/99-amar-temp` that Task 12 removes. **That file never existed.** What exists is `/etc/sudoers.d/amar` (`amar ALL=(ALL:ALL) NOPASSWD:ALL`, `0440`, created 2026-07-20 07:35).
+
+**Resolved 2026-07-21:** passwordless sudo for `amar` is **kept as permanent, intended** configuration — `amar` has a usable password (so this is a convenience choice, not a lockout risk), and this server's Claude Code sessions run sudo non-interactively, where a password prompt would hang. The Global Constraints note and Task 12 Step 1 were rewritten to match; the file stays in place.
 
 ### Correction 3: leftover cloud-init `debian` account
 
